@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LogEntry;
 use Carbon\Carbon;
 use GuzzleHttp\Client;
 use Illuminate\Http\Request;
@@ -21,9 +22,14 @@ class WeatherForecastController extends Controller
             'city' => 'required',
             'unit' => 'required|in:F,C',
         ]);
+        $logEntry = LogEntry::make();
+        $logEntry->description = '';
+        $logEntry->request_city = $data['city'];
+        $logEntry->request_unit = $data['unit'];
         $minutes = 60;
-        $cacheItem = $data['city'] . 'forecast';
-        $forecast = Cache::remember($cacheItem, $minutes, function () use ($data) {
+        $cacheItem = $data['unit'] . '-' . $data['city'] . '-' . 'forecast';
+        $forecast = Cache::remember($cacheItem, $minutes, function () use ($data, $logEntry) {
+            $logEntry->description = 'No cache used for this request';
             $app_key = config("weather.open_weather_app_key");
             $units = $this->getUnits($data['unit']);
             $city = $data['city'];
@@ -36,6 +42,14 @@ class WeatherForecastController extends Controller
             }
             return $forecast;
         });
+
+        if ($logEntry->description === '') {
+            $logEntry->description = 'Cache used for this request';
+        }
+
+        $logEntry->response_temperature = $forecast->temperature;
+        $logEntry->response_forecast_description = $forecast->description;
+        $logEntry->save();
 
         return $forecast;
     }
